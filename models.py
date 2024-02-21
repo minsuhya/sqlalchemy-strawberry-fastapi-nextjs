@@ -12,24 +12,23 @@ Base = declarative_base()
 
 class Author(Base):
     __tablename__ = "authors"
-    id: int = Column(Integer, primary_key=True, index=True)
-    name: str = Column(String, nullable=False, unique=True)
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
 
-    books: list["Book"] = relationship("Book", lazy="joined", back_populates="author")
+    books = relationship("Book", lazy="joined", back_populates="author")
 
 
 class Book(Base):
     __tablename__ = "books"
-    id: int = Column(Integer, primary_key=True, index=True)
-    name: str = Column(String, nullable=False)
-    author_id: Optional[int] = Column(Integer, ForeignKey(Author.id), nullable=True)
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    author_id = Column(Integer, ForeignKey(Author.id), nullable=True)
 
-    author: Optional[Author] = relationship(Author, lazy="joined", back_populates="books")
+    author = relationship(Author, lazy="joined", back_populates="books")
 
 
-engine = create_async_engine(
-    "sqlite+aiosqlite:///./database.db", connect_args={"check_same_thread": False}
-)
+engine = create_async_engine("sqlite+aiosqlite:///./database.db",
+                             connect_args={"check_same_thread": False})
 
 async_session = sessionmaker(
     bind=engine,

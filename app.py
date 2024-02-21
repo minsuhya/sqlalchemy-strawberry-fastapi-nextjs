@@ -9,6 +9,7 @@ from strawberry.dataloader import DataLoader
 
 import models
 
+
 @strawberry.type
 class Author:
     id: strawberry.ID
@@ -38,30 +39,55 @@ class Book:
             author=Author.marshal(model.author) if model.author else None,
         )
 
+
 @strawberry.type
 class AuthorExists:
     message: str = "Author with this name already exist"
+
 
 @strawberry.type
 class AuthorNotFound:
     message: str = "Couldn't find an author with the supplied name"
 
+
 @strawberry.type
 class AuthorNameMissing:
     message: str = "Please supply an author name"
 
-AddBookResponse = strawberry.union("AddBookResponse", (Book, AuthorNotFound, AuthorNameMissing))
-AddAuthorResponse = strawberry.union("AddAuthorResponse", (Author, AuthorExists))
 
+AddBookResponse = strawberry.union("AddBookResponse",
+                                   (Book, AuthorNotFound, AuthorNameMissing))
+AddAuthorResponse = strawberry.union("AddAuthorResponse",
+                                     (Author, AuthorExists))
 
 all_tasks: list = []
 
+
+# custom input type
+@strawberry.input
+class BooksQueryInput:
+    author_name: Optional[str] = strawberry.UNSET
+
+
 @strawberry.type
 class Query:
+
+    # @strawberry.field
+    # async def books(self) -> list[Book]:
+    # async with models.get_session() as s:
+    #     sql = select(models.Book).order_by(models.Book.name)
+    #     db_book = (await s.execute(sql)).scalars().unique().all()
+    # return [Book.marshal(book) for book in db_book]
     @strawberry.field
-    async def books(self) -> list[Book]:
+    async def books(self,
+                    query_input: Optional[BooksQueryInput] = None
+                    ) -> list[Book]:
         async with models.get_session() as s:
-            sql = select(models.Book).order_by(models.Book.name)
+            if query_input:
+                sql = select(models.Book).join(models.Author) \
+                        .filter(models.Author.name == query_input.author_name)
+            else:
+                sql = select(models.Book).order_by(models.Book.name)
             db_book = (await s.execute(sql)).scalars().unique().all()
         return [Book.marshal(book) for book in db_book]
 
@@ -75,12 +101,15 @@ class Query:
 
 @strawberry.type
 class Mutation:
+
     @strawberry.mutation
-    async def add_book(self, name: str, author_name: Optional[str]) -> AddBookResponse:
+    async def add_book(self, name: str,
+                       author_name: Optional[str]) -> AddBookResponse:
         async with models.get_session() as s:
             db_author = None
             if author_name:
-                sql = select(models.Author).where(models.Author.name == author_name)
+                sql = select(
+                    models.Author).where(models.Author.name == author_name)
                 db_author = (await s.execute(sql)).scalars().first()
                 if not db_author:
                     return AuthorNotFound()
@@ -106,8 +135,12 @@ class Mutation:
 
 async def load_books_by_author(keys: list) -> list[Book]:
     async with models.get_session() as s:
-        all_queries = [select(models.Book).where(models.Book.author_id == key) for key in keys]
-        data = [(await s.execute(sql)).scalars().unique().all() for sql in all_queries]
+        all_queries = [
+            select(models.Book).where(models.Book.author_id == key)
+            for key in keys
+        ]
+        data = [(await s.execute(sql)).scalars().unique().all()
+                for sql in all_queries]
         print(keys, data)
     return data
 
@@ -126,6 +159,7 @@ async def get_context() -> dict:
         "author_by_book": DataLoader(load_fn=load_author_by_book),
         "books_by_author": DataLoader(load_fn=load_books_by_author),
     }
+
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)
 graphql_app = GraphQLRouter(schema, context_getter=get_context)
